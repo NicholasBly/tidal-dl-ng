@@ -45,6 +45,7 @@
 
 
 import math
+import os
 import sys
 import time
 from collections.abc import Callable, Iterable, Sequence
@@ -84,6 +85,8 @@ from tidal_dl_ng.helper.tidal import (
 try:
     import qdarktheme
     from PySide6 import QtCore, QtGui, QtWidgets
+    from PySide6.QtCore import QUrl
+    from PySide6.QtGui import QDesktopServices
 except ImportError as e:
     print(e)
     print("Qt dependencies missing. Cannot start GUI. Please read the 'README.md' carefully.")
@@ -142,7 +145,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     s_update_check: QtCore.Signal = QtCore.Signal(bool)
     s_update_show: QtCore.Signal = QtCore.Signal(bool, bool, object)
     s_queue_download_item_downloading: QtCore.Signal = QtCore.Signal(object)
-    s_queue_download_item_finished: QtCore.Signal = QtCore.Signal(object)
+    s_queue_download_item_finished: QtCore.Signal = QtCore.Signal(object, str)
     s_queue_download_item_failed: QtCore.Signal = QtCore.Signal(object)
     s_queue_download_item_skipped: QtCore.Signal = QtCore.Signal(object)
     converter_ansi_html: Ansi2HTMLConverter
@@ -621,6 +624,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         status = item.text(0)
         if status == QueueDownloadStatus.Waiting:
             menu.addAction("🗑️ Remove from Queue", lambda: self.on_queue_download_remove_item(item))
+            file_path = item.text(1)
+            if file_path and os.path.exists(file_path):
+                menu.addAction("📂 Open Containing Folder", lambda: self.open_item_folder(file_path))
 
         if menu.isEmpty():
             return
@@ -1348,6 +1354,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.tr_results.doubleClicked.connect(lambda: self.thread_it(self.on_download_results))
 
         # Download Queue
+        self.tr_queue_download.itemDoubleClicked.connect(self.on_queue_item_double_clicked)
         self.tr_queue_download.itemClicked.connect(self.on_queue_download_item_clicked)
         self.s_queue_download_item_downloading.connect(self.on_queue_download_item_downloading)
         self.s_queue_download_item_finished.connect(self.on_queue_download_item_finished)
@@ -1687,10 +1694,10 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
                 try:
                     self.s_queue_download_item_downloading.emit(item)
-                    result = self.on_queue_download(media, quality_audio=quality_audio, quality_video=quality_video)
+                    result, path_file = self.on_queue_download(media, quality_audio=quality_audio, quality_video=quality_video)
 
                     if result == QueueDownloadStatus.Finished:
-                        self.s_queue_download_item_finished.emit(item)
+                        self.s_queue_download_item_finished.emit(item, path_file)
                     elif result == QueueDownloadStatus.Skipped:
                         self.s_queue_download_item_skipped.emit(item)
                 except Exception as e:
@@ -1707,13 +1714,15 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         """
         self.queue_download_item_status(item, QueueDownloadStatus.Downloading)
 
-    def on_queue_download_item_finished(self, item: QtWidgets.QTreeWidgetItem) -> None:
+    def on_queue_download_item_finished(self, item: QtWidgets.QTreeWidgetItem, path_file: str | None) -> None:
         """Update the status of a queue download item to 'Finished'.
 
         Args:
             item (QtWidgets.QTreeWidgetItem): The item to update.
         """
         self.queue_download_item_status(item, QueueDownloadStatus.Finished)
+        if path_file:
+            item.setText(1, path_file)
 
     def on_queue_download_item_failed(self, item: QtWidgets.QTreeWidgetItem) -> None:
         """Update the status of a queue download item to 'Failed'.
@@ -1745,7 +1754,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         media: Track | Album | Playlist | Video | Mix | Artist,
         quality_audio: Quality | None = None,
         quality_video: QualityVideo | None = None,
-    ) -> QueueDownloadStatus:
+    ) -> QueueDownloadStatus, str | None):
         """Download the specified media item(s) and return the result status.
 
         Args:
@@ -1765,9 +1774,11 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             items_media = [media]
 
         download_delay: bool = bool(isinstance(media, Track | Video) and self.settings.data.download_delay)
+        path_file_result: str | None = None
+        result: QueueDownloadStatus = QueueDownloadStatus.Failed
 
         for item_media in items_media:
-            result = self.download(
+            result, path_file = self.download(
                 item_media,
                 self.dl,
                 delay_track=download_delay,
@@ -1775,7 +1786,10 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 quality_video=quality_video,
             )
 
-        return result
+        if path_file:
+            path_file_result = path_file
+
+        return result, path_file_result
 
     def download(
         self,
@@ -1784,7 +1798,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         delay_track: bool = False,
         quality_audio: Quality | None = None,
         quality_video: QualityVideo | None = None,
-    ) -> QueueDownloadStatus:
+    ) -> QueueDownloadStatus, str | None):
         """Download a media item and return the result status.
 
         Args:
@@ -1798,7 +1812,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             QueueDownloadStatus: The status of the download operation.
         """
         result_dl: bool
-        path_file: str
+        path_file: str | None = None
         result: QueueDownloadStatus
         self.s_pb_reset.emit()
         self.s_statusbar_message.emit(StatusbarMessage(message="Download started..."))
@@ -1825,7 +1839,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
             # Dummy values
             result_dl = True
-            path_file = "dummy"
+            path_file = None
 
         self.s_statusbar_message.emit(StatusbarMessage(message="Download finished.", timeout=2000))
 
@@ -1836,7 +1850,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         else:
             result = QueueDownloadStatus.Failed
 
-        return result
+        return result, path_file
 
     def on_version(
         self, update_check: bool = False, update_available: bool = False, update_info: ReleaseLatest | None = None
@@ -1958,6 +1972,32 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         else:
             logger_gui.warning("Could not retrieve album information from the selected track.")
 
+def open_item_folder(self, file_path: str):
+    """
+    Opens the folder containing the specified file.
+    """
+    if not file_path or not os.path.exists(file_path):
+        self.s_statusbar_message.emit(StatusbarMessage(f"Error: File path not found: {file_path}", 5000))
+        return
+
+    folder_path = os.path.dirname(file_path)
+
+    QDesktopServices.openUrl(QUrl.fromLocalFile(folder_path))
+
+def on_queue_item_double_clicked(self, item: QtWidgets.QTreeWidgetItem, column: int):
+    """
+    Called when a queue item is double-clicked.
+    Attempts to play the downloaded file.
+    """
+    file_path = item.text(1)
+
+    if file_path and os.path.exists(file_path):
+        self.s_statusbar_message.emit(StatusbarMessage(f"Opening {file_path}...", 2000))
+        QDesktopServices.openUrl(QUrl.fromLocalFile(file_path))
+    elif file_path:
+        self.s_statusbar_message.emit(StatusbarMessage(f"File not found: {file_path}", 5000))
+    else:
+        self.s_statusbar_message.emit(StatusbarMessage("Download not complete or path not available.", 3000))
 
 # TODO: Comment with Google Docstrings.
 def gui_activate(tidal: Tidal | None = None):
