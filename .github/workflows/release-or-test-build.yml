@@ -165,7 +165,6 @@ jobs:
       - name: Build with pyinstaller for ${{matrix.TARGET}}
         run: ${{matrix.CMD_BUILD}}
       - name: Upload Release Asset
-        if: startsWith(github.ref, 'refs/tags/')
         id: upload-release-asset
         uses: softprops/action-gh-release@v2
         env:
