@@ -93,7 +93,7 @@ jobs:
           echo "ARCH_WINDOWS_ARM64=${{ env.ARCH_WINDOWS_ARM64 }}" >> $GITHUB_OUTPUT
   build-gui-and-upload-assets:
     needs: ["compute"]
-    if: always() && needs.compute.result == 'success' && (startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/test-build')
+    if: always() && needs.compute.result == 'success' && (startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/test-build' || github.event_name == 'workflow_dispatch')
     strategy:
       fail-fast: false
       matrix:
