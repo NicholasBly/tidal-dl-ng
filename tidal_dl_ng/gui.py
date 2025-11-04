@@ -1754,7 +1754,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         media: Track | Album | Playlist | Video | Mix | Artist,
         quality_audio: Quality | None = None,
         quality_video: QualityVideo | None = None,
-    ) -> QueueDownloadStatus, str | None):
+    ) -> tuple[QueueDownloadStatus, str | None]:
         """Download the specified media item(s) and return the result status.
 
         Args:
@@ -1798,7 +1798,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         delay_track: bool = False,
         quality_audio: Quality | None = None,
         quality_video: QualityVideo | None = None,
-    ) -> QueueDownloadStatus, str | None):
+    ) -> tuple[QueueDownloadStatus, str | None]:
         """Download a media item and return the result status.
 
         Args:
