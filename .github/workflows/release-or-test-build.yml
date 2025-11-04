@@ -164,11 +164,10 @@ jobs:
         uses: ./.github/actions/setup-poetry-env
       - name: Build with pyinstaller for ${{matrix.TARGET}}
         run: ${{matrix.CMD_BUILD}}
-      - name: Upload Release Asset
-        id: upload-release-asset
-        uses: softprops/action-gh-release@v2
-        env:
-          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+      - name: Upload Build Artifact (for testing)
+        if: "!startsWith(github.ref, 'refs/tags/')"
+        uses: actions/upload-artifact@v4
         with:
-          files: |
-            ./dist/${{needs.compute.outputs.OUT_NAME_FILE}}_${{matrix.OS_ARCH}}${{needs.compute.outputs.ASSET_EXTENSION}}
+          name: ${{needs.compute.outputs.OUT_NAME_FILE}}_${{matrix.OS_ARCH}}
+          path: ./dist/${{needs.compute.outputs.OUT_NAME_FILE}}_${{matrix.OS_ARCH}}${{needs.compute.outputs.ASSET_EXTENSION}}
+          retention-days: 7
