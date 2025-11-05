@@ -1972,6 +1972,36 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         else:
             logger_gui.warning("Could not retrieve album information from the selected track.")
 
+    def open_item_folder(self, file_path: str):
+        """
+        Opens the folder containing the specified file.
+        """
+        if not file_path or not os.path.exists(file_path):
+            self.s_statusbar_message.emit(StatusbarMessage(f"Error: File path not found: {file_path}", 5000))
+            return
+
+        # Get the directory (folder) from the full file path
+        folder_path = os.path.dirname(file_path)
+
+        # Use QDesktopServices to open the folder in the native file explorer
+        QDesktopServices.openUrl(QUrl.fromLocalFile(folder_path))
+
+    def on_queue_item_double_clicked(self, item: QtWidgets.QTreeWidgetItem, column: int):
+        """
+        Called when a queue item is double-clicked.
+        Attempts to play the downloaded file.
+        """
+        file_path = item.text(1)  # Get path from hidden column 1
+
+        if file_path and os.path.exists(file_path):
+            self.s_statusbar_message.emit(StatusbarMessage(f"Opening {file_path}...", 2000))
+            # This will open the file with the default system application (e.g., music player)
+            QDesktopServices.openUrl(QUrl.fromLocalFile(file_path))
+        elif file_path:
+            self.s_statusbar_message.emit(StatusbarMessage(f"File not found: {file_path}", 5000))
+        else:
+            self.s_statusbar_message.emit(StatusbarMessage("Download not complete or path not available.", 3000))
+
 def open_item_folder(self, file_path: str):
     """
     Opens the folder containing the specified file.
